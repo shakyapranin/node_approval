@@ -1,3 +1,5 @@
+# WARNING : THIS MODULE NEEDS REFACTORING BEFORE IT CAN BE FULLY MODULAR
+
 # Drupal 7 module : node_approval
 SUMMARY : Drupal module for implementing approval mechanism as per roles for nodes. Support for multi-user approvals
 
