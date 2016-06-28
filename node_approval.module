@@ -1,0 +1,615 @@
+<?php
+
+/**
+ * @file
+ * A module for creating main module entity.
+ */
+// Loading the Constant Defined File
+//module_load_include('inc', 'node_approval', 'node_approval.constant');
+
+/**
+ * Implements hook_help().
+ * This function return the help info regarding main module
+ * @param <type> $path
+ * @param <type> $arg
+ * @return <type>
+ */
+function node_approval_help($path, $arg)
+{
+    if ($path == 'admin/help#node_approval') {
+        return t('A node approval for vcss setup!');
+    }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function node_approval_permission()
+{
+    return array(
+        APPROVE_REAL_LIFE_STORIES_CONTENT => array(
+            'title' => t('Approve real life stories content'),
+            'description' => t('Check to approve this content'),
+            'restrict access' => TRUE,
+        ),
+/*        APPROVE_VIDEO_LIBRARY => array(
+            'title' => t('Approve video library content'),
+            'description' => t('Check to approve this content'),
+            'restrict access' => TRUE,
+        ),*/
+        APPROVE_RESOURCES => array(
+            'title' => t('Approve resources content'),
+            'description' => t('Check to approve this content'),
+            'restrict access' => TRUE,
+        ),
+        APPROVE_FAQ => array(
+            'title' => t('Approve faq content'),
+            'description' => t('Check to approve this content'),
+            'restrict access' => TRUE,
+        ),
+        APPROVE_BLOG => array(
+            'title' => t('Approve blog content'),
+            'description' => t('Check to approve this content'),
+            'restrict access' => TRUE,
+        ),
+        APPROVE_EVENTS => array(
+            'title' => t('Approve events content'),
+            'description' => t('Check to approve this content'),
+            'restrict access' => TRUE,
+        ),
+        APPROVE_CAREERS => array(
+            'title' => t('Approve careers content'),
+            'description' => t('Check to approve this content'),
+            'restrict access' => TRUE,
+        ),
+        APPROVE_LINKS => array(
+            'title' => t('Approve links content'),
+            'description' => t('Check to approve this content'),
+            'restrict access' => TRUE,
+        ),
+/*        APPROVE_LOCATIONS => array(
+            'title' => t('Approve locations content'),
+            'description' => t('Check to approve this content'),
+            'restrict access' => TRUE,
+        ),*/
+        APPROVE_GALLERY => array(
+            'title' => t('Approve gallery content'),
+            'description' => t('Check to approve this content'),
+            'restrict access' => TRUE,
+        ),
+        APPROVE_MISCELLANEOUS => array(
+            'title' => t('Approve miscellaneous content'),
+            'description' => t('Check to approve this content'),
+            'restrict access' => TRUE,
+        ),
+    );
+}
+
+
+function check_node_approval_status(&$node, $nid)
+{
+
+    if($node->type=='sitelocations'||$node->type=='videos'||$node->type=='banner'){
+        //Escape sitelocations and videos from node approval
+    }else {
+
+        $result = db_select('node_approval', 'na')
+            ->fields('na', array('user_ids', 'node_id'))
+            ->condition('node_id', $nid)
+            ->execute()
+            ->fetchObject();
+
+        if ($result) {
+            $userids = unserialize($result->user_ids);
+            $publish_flag = false;
+            //For each user id check if they have approved the node content by cross referencing their ids with ones on the user_has_approved table.
+            foreach ($userids as $userid) {
+                $approved = db_select('user_has_approved', 'uha')
+                    ->fields('uha', array('status'))
+                    ->condition('user_id', $userid)
+                    ->condition('node_id', $nid)
+                    ->execute()
+                    ->fetchObject();
+                if ($approved) {
+                    if ($approved->status == 1) {
+                        $publish_flag = true;//Collect approvals from every user assigned to review the content.
+                    } else {
+                        $publish_flag = false;//If any 1 of the user has not set their approved status the content wont be published.
+                        break;
+                    }
+                }
+
+            }
+
+            //Change the status field of the node from {node} table for implementing and concluding this approval mechanism
+            if ($publish_flag == true) {
+                //Set status to 1 if true.
+                $node->status = 1;
+                db_update('node_revision')
+                    ->fields(
+                        array(
+                            'status' => '1',
+                        )
+                    )
+                    ->condition('nid', $node->nid)
+                    ->execute();
+                return 1;
+            } else {
+                //Set status to 0 if false.
+                $node->status = 0;
+                db_update('node_revision')
+                    ->fields(
+                        array(
+                            'status' => '0',
+                        )
+                    )
+                    ->condition('nid', $node->nid)
+                    ->execute();
+                return 0;
+            }
+
+        }
+
+    }
+
+
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function node_approval_node_insert($node)
+{
+
+    global $user;
+
+    // Don't publish content by default before approval
+    if ($node->is_new) {
+
+        //Escape node types from needing approval.
+        if($node->type=='sitelocations'||$node->type=='videos'||$node->type=='banner') {
+            $node->status = "1";
+        }else{
+            $node->status = "0";
+        //Send mail to respective persons with permission to approve the content
+
+        //Role having permission to approve content of this node type
+        $node_type = '';
+        switch ($node->type) {
+            case 'reallifestories':
+                $roles = user_roles(TRUE, APPROVE_REAL_LIFE_STORIES_CONTENT);
+                $node_type = "real life stories";
+                break;
+/*            case 'videos':
+                $roles = user_roles(TRUE, APPROVE_VIDEO_LIBRARY);
+                $node_type = "videos";
+                break;*/
+            case 'resources':
+                $roles = user_roles(TRUE, APPROVE_RESOURCES);
+                $node_type = "resources";
+                break;
+            case 'faq':
+                $roles = user_roles(TRUE, APPROVE_FAQ);
+                $node_type = "faq";
+                break;
+            case 'blog':
+                $roles = user_roles(TRUE, APPROVE_BLOG);
+                $node_type = "blog";
+                break;
+            case 'events':
+                $roles = user_roles(TRUE, APPROVE_EVENTS);
+                $node_type = "events";
+                break;
+            case 'careers':
+                $roles = user_roles(TRUE, APPROVE_CAREERS);
+                $node_type = "careers";
+                break;
+            case 'links':
+                $roles = user_roles(TRUE, APPROVE_LINKS);
+                $node_type = "links";
+                break;
+/*            case 'sitelocations':
+                $roles = user_roles(TRUE, APPROVE_LOCATIONS);
+                $node_type = "site locations";
+                break;*/
+            case 'gallery':
+                $roles = user_roles(TRUE, APPROVE_GALLERY);
+                $node_type = "gallery";
+                break;
+            case 'miscellaneous':
+                $roles = user_roles(TRUE, APPROVE_MISCELLANEOUS);
+                $node_type = "miscellaneous";
+                break;
+        }
+        //For each roles get the users who have this role
+        $users = array();
+        //Get roles as an array
+        foreach ($roles as $key => $roleU) {
+
+            if ($roleU == 'administrator') {
+
+            } else {
+                $role = user_role_load_by_name($roleU);
+                $result = db_select('users_roles', 'ur')
+                    ->fields('ur', array('uid'))
+                    ->condition('rid', $role->rid)
+                    ->execute()->fetchAll();
+
+                //Get users with the current loop role
+
+                foreach ($result as $user_info) {
+                    $user_loaded = user_load($user_info->uid);
+                    if (array_key_exists(1, $user_loaded->roles)) {
+                        //Excluding admin
+                    } else {
+                        $users[] = $user_info->uid;
+                    }
+                }
+                //Send email requesting content approval
+                if (!empty($users)) {
+                    $responsible_users = user_load_multiple($users);
+                    foreach ($responsible_users as $rusers) {
+                        if ($rusers->uid == $user->uid) {
+                            //Logic to not send email to current user who entered the content.
+                        } else {
+                            $module = 'node_approval';
+                            $key = 'node_approval_request';
+
+                            // Specify 'to' and 'from' addresses.
+                            $to = $rusers->mail;
+                            $from = variable_get('site_mail', $rusers->mail);
+
+
+                            // "params" loads in additional context for email content completion in
+                            // hook_mail(). In this case, we want to pass in the values the user entered
+                            // into the form, which include the message body in $form_values['message'].
+                            $params['message'] = "New content for ".$node_type." has been created and waiting to be approved.";
+                            $params['subject'] = "Content approval request for ".$node_type." content.";
+
+                            // The language of the e-mail. This will one of three values:
+                            // - user_preferred_language(): Used for sending mail to a particular website
+                            //   user, so that the mail appears in their preferred language.
+                            // - global $language: Used when sending a mail back to the user currently
+                            //   viewing the site. This will send it in the language they're currently
+                            //   using.
+                            // - language_default(): Used when sending mail to a pre-existing, 'neutral'
+                            //   address, such as the system e-mail address, or when you're unsure of the
+                            //   language preferences of the intended recipient.
+                            //
+                            // Since in our case, we are sending a message to a random e-mail address that
+                            // is not necessarily tied to a user account, we will use the site's default
+                            // language.
+                            $language = language_default();
+
+                            // Whether or not to automatically send the mail when drupal_mail() is
+                            // called. This defaults to TRUE, and is normally what you want unless you
+                            // need to do additional processing before drupal_mail_send() is called.
+                            $send = TRUE;
+                            // Send the mail, and check for success. Note that this does not guarantee
+                            // message delivery; only that there were no PHP-related issues encountered
+                            // while sending.
+
+                            $mailresult = drupal_mail($module, $key, $to, $language, $params, $from, $send);
+                            if ($mailresult['result'] == TRUE) {
+
+                            }
+
+                        }
+
+                    }//Users loop ends here
+                    $users = array();//Empty users array on loop end to prevent sending mail repeatedly to the responsible user previously set
+                }
+            }
+        }//Role loop ends here
+    }
+    }
+
+    create_approval_entries($node);//create fields in node_approval and user_has_approved table
+    check_node_approval_status($node,$node->nid);//Set field to unpublished by default.
+
+    $node->is_new = false;//treat the node as an old entry as at this point a record for this node has already been created in the database
+    node_save($node);//Save the node status if any changes have occured from check_node_approval_status function.
+
+}
+
+function node_approval_node_presave($node){
+    global $user;
+    if($node->type=='sitelocations'||$node->type=='videos'||$node->type=='banner'){
+        //Escape videos and locations from requiring approval.
+    }else {
+
+        if (isset($node->nid) && !empty($node->nid)):
+            if (isset($node->individual_approval_status)) {
+                $res = db_update('user_has_approved')
+                    ->fields(
+                        array(
+                            'status' => $node->individual_approval_status,
+                        )
+                    )
+                    ->condition('node_id', $node->nid)
+                    ->condition('user_id', $user->uid)
+                    ->execute();
+                //Check whether all responsible users have approved the content or not and change the published status.
+                $node->status = check_node_approval_status($node, $node->nid);
+                unset($node->individual_approval_status);
+
+            }
+        endif;//Only run for new nodes
+    }
+
+
+}
+
+/**
+ * Implements hook_node_update().
+ */
+function node_approval_node_update($node)
+{
+    //echo "Node before update:";var_dump($node);
+
+
+    //global $user;
+/*    if(isset($node->nid)&&!empty($node->nid)):
+    if (isset($node->individual_approval_status)) {
+        $res = db_update('user_has_approved')
+            ->fields(
+                array(
+                    'status' => $node->individual_approval_status,
+                )
+            )
+            ->condition('node_id', $node->nid)
+            ->condition('user_id', $user->uid)
+            ->execute();
+        //Check whether all responsible users have approved the content or not and change the published status.
+        $node->status = check_node_approval_status($node, $node->nid);
+        unset($node->individual_approval_status);
+
+    }
+    endif;//Only run for new nodes*/
+
+}
+
+/**
+ * Implements hook_node_delete().
+ */
+function node_approval_node_delete($node)
+{
+
+    db_delete('node_approval')
+        ->condition('node_id', $node->nid)
+        ->execute();
+
+    db_delete('user_has_approved')
+        ->condition('node_id', $node->nid)
+        ->execute();
+}
+
+function create_approval_entries($node)
+{
+    global $user;
+    //Send mail when the node is first created
+    if ($node->is_new) {
+        switch ($node->type) {
+            case 'reallifestories':
+                $roles = user_roles(TRUE, APPROVE_REAL_LIFE_STORIES_CONTENT);
+                break;
+/*            case 'videos':
+                $roles = user_roles(TRUE, APPROVE_VIDEO_LIBRARY);
+                break;*/
+            case 'resources':
+                $roles = user_roles(TRUE, APPROVE_RESOURCES);
+                break;
+            case 'faq':
+                $roles = user_roles(TRUE, APPROVE_FAQ);
+                break;
+            case 'blog':
+                $roles = user_roles(TRUE, APPROVE_BLOG);
+                break;
+            case 'events':
+                $roles = user_roles(TRUE, APPROVE_EVENTS);
+                break;
+            case 'careers':
+                $roles = user_roles(TRUE, APPROVE_CAREERS);
+                break;
+            case 'links':
+                $roles = user_roles(TRUE, APPROVE_LINKS);
+                break;
+/*            case 'sitelocations':
+                $roles = user_roles(TRUE, APPROVE_LOCATIONS);
+                break;*/
+            case 'gallery':
+                $roles = user_roles(TRUE, APPROVE_GALLERY);
+                break;
+            case 'miscellaneous':
+                $roles = user_roles(TRUE, APPROVE_MISCELLANEOUS);
+                break;
+        }
+        //For each roles get the users who have this role
+        $users = array();
+        foreach ($roles as $key => $roleU) {
+            if ($roleU == 'administrator') {
+
+            } else {
+                $role = user_role_load_by_name($roleU);
+                $result = db_select('users_roles', 'ur')
+                    ->fields('ur', array('uid'))
+                    ->condition('rid', $role->rid)
+                    ->execute()->fetchAll();
+                foreach ($result as $record) {
+                    $user_loaded = user_load($record->uid);
+                    if (array_key_exists(1, $user_loaded->roles)) {
+                        //Excluding admin
+                    } else {
+                        if ($record->uid == $user->uid) {
+                            //Avoid creating an entry of user id in user has approved table.
+                        } else {
+                            $users[] = $record->uid;//This is to enter user ids apart from current user into users array
+                            db_insert('user_has_approved')
+                                ->fields(
+                                    array(
+                                        'user_id' => $record->uid,
+                                        'status' => 0,
+                                        'node_id' => $node->nid,
+                                        'bundle' => $node->type,
+                                    )
+                                )->execute();
+                        }
+                    }
+
+                }
+
+            }
+        }
+        //For each node only one entry is needed in node_approval table.
+
+        $serialized_uids = serialize($users);
+        $insert = db_insert('node_approval')
+            ->fields(
+                array(
+                    'user_ids' => $serialized_uids,
+                    'published' => 0,
+                    'node_id' => $node->nid,
+                )
+            )->execute();
+        drupal_get_messages($insert);
+
+    }
+
+}
+
+function node_approval_mail($key, &$message, $params)
+{
+    global $user;
+    $options = array(
+        'langcode' => $message['language']->language,
+    );
+
+    switch ($key) {
+        // Send a simple message from the contact form.
+        case 'node_approval_request':
+            $message['subject'] = t('E-mail sent from @site-name', array('@site-name' => variable_get('site_name', 'Drupal')), $options) . " " . $params['subject'];
+            // Note that the message body is an array, not a string.
+            $message['body'][] = t('@name sent you the following message:', array('@name' => $user->name), $options);
+            // Because this is just user-entered text, we do not need to translate it.
+            // Since user-entered text may have unintentional HTML entities in it like
+            // '<' or '>', we need to make sure these entities are properly escaped,
+            // as the body will later be transformed from HTML to text, meaning
+            // that a normal use of '<' will result in truncation of the message.
+            $message['body'][] = check_plain($params['message']);
+            break;
+    }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function node_approval_form_alter(&$form, &$form_state, $form_id)
+{
+    global $user;
+    //Check if this record is new or not
+    if (!isset($form_state['node']->nid) || isset($form_state['node']->is_new)) {
+    } else {
+        //Check user id for its permission to display the check box.
+        $allowCheckboxVisible = false;
+        switch ($form['type']['#value']) {
+            case 'reallifestories':
+                $allowCheckboxVisible = user_access(APPROVE_REAL_LIFE_STORIES_CONTENT);
+                break;
+/*            case 'videos':
+                $allowCheckboxVisible = user_access(APPROVE_VIDEO_LIBRARY);
+                break;*/
+            case 'resources':
+                $allowCheckboxVisible = user_access(APPROVE_RESOURCES);
+                break;
+            case 'faq':
+                $allowCheckboxVisible = user_access(APPROVE_FAQ);
+                break;
+            case 'blog':
+                $allowCheckboxVisible = user_access(APPROVE_BLOG);
+                break;
+            case 'events':
+                $allowCheckboxVisible = user_access(APPROVE_EVENTS);
+                break;
+            case 'careers':
+                $allowCheckboxVisible = user_access(APPROVE_CAREERS);
+                break;
+            case 'links':
+                $allowCheckboxVisible = user_access(APPROVE_LINKS);
+                break;
+/*            case 'sitelocations':
+                $allowCheckboxVisible = user_access(APPROVE_LOCATIONS);
+                break;*/
+            case 'gallery':
+                $allowCheckboxVisible = user_access(APPROVE_GALLERY);
+                break;
+            case 'miscellaneous':
+                $allowCheckboxVisible = user_access(APPROVE_MISCELLANEOUS);
+                break;
+        }
+
+        //Make the approved checkbox visible to only those users who have be allocated to approve the content
+        //i.e. cross reference uid's from the user_has_approved table to make the checkbox available here
+
+        $current_userid = $user->uid;
+        $result = db_select('user_has_approved', 'uha')
+            ->fields('uha', array('user_id'))
+            ->condition('node_id',$form_state['node']->nid)
+            ->condition('user_id', $current_userid)
+            ->execute()
+            ->fetchAll();
+        if ($result):
+            if ($allowCheckboxVisible) {
+                $form['individual_approval_status'] = array(
+                    '#type' => 'checkbox',
+                    '#title' => t('Approve Content'),
+                    '#default_value' => get_approval_status($user->uid, $form_state['node']->nid),
+                    '#description' => t("Check the above box to approve content."),
+                    '#weight' => -10,
+                );
+            }
+        endif;
+
+
+    }
+
+    //Hide the published status button from view.
+    $form['options']['status'] = array(
+        '#type' => 'value',
+        '#value' => 1
+    );
+    return $form;
+}
+
+/*
+Function to check if approved by the particular user or not
+*/
+function get_approval_status($uid, $nid)
+{
+
+    $flag = db_select('user_has_approved', 'uha')
+        ->fields('uha', array('status'))
+        ->condition('user_id', $uid)
+        ->condition('node_id', $nid)
+        ->execute()
+        ->fetchObject();
+
+    /*    $qryToGetStatus = "Select uhr.status from user_has_approved as uhr where user_id=" . $uid . " and node_id=" . $nid;
+        $flag = db_query($qryToGetStatus);*/
+
+    if (!$flag) {
+        // problem with query
+    } elseif ($flag) {
+        // results returned
+        if ($flag->status == '1') {
+            return true;// Checked
+        } else {
+            return false;//Not Checked
+        }
+
+    } else {
+        // no results, but good query
+        return false;//Not created
+        //return array();//Indicates not approved or pending.//no entry made.
+    }
+
+}

@@ -1,0 +1,13 @@
+name = Node approval module
+description = Node approval module developed for VCSS.
+package = VIEW9 modules
+version = VERSION
+core = 7.x
+
+files[] = node_approval.constant.inc
+files[] = node_approval.module
+
+dependencies[] = view_unpublished
+dependencies[] = main_module
+
+author = Pranin Shakya
